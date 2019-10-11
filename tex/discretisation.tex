@@ -1,0 +1,42 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{mathtools,bm}
+
+\begin{document}
+\section*{Discretisation}
+
+\subsection*{1-D}
+\begin{align*}
+    \phi_{i, 0} &= \bar{\phi} + (\zeta_i - 0.5)\delta_\phi, \quad \zeta_i \sim \mathcal{U}[0,1]\\
+    \mu_{i,0} &= 0
+\end{align*}
+
+\begin{align*}
+    \nabla^2\phi_{i;k+1} &= \frac{\phi_{i-\delta_x;k} - 2\phi_{i;k} + \phi_{i+\delta_x;k}}{\delta_x^{2}}\\
+    \mu_{i;k+1} &= - \alpha\phi_{i;k} + \beta\phi_{i;k}^3 - \kappa\nabla^2\phi_{i;k+1}
+\end{align*}
+
+\begin{align*}
+    \nabla^2\mu_{i;k+1} &= \frac{\mu_{i-\delta_x;k+1} - 2\mu_{i;k+1}+\mu_{i+\delta_x;k+1}}{\delta_x^{2}}\\
+    \phi_{i;k+1} &= \phi_{i;k} + M\delta_t\nabla^2\mu_{i;k+1}
+\end{align*}
+
+\subsection*{2-D}
+
+\begin{align*}
+    \phi_{i,j; 0} &= \bar{\phi} + (\zeta_{i,j} - 0.5)\delta_\phi, \quad \zeta_i \sim \mathcal{U}[0,1]\\
+    \mu_{i,j;0} &= 0
+\end{align*}
+
+\begin{align*}
+    \nabla^2\phi_{i,j;k+1} &= \frac{\phi_{i-\delta_x,j;k} + \phi_{i,j-\delta_x;k} - 4\phi_{i,j;k} + \phi_{i+\delta_x,j;k} + \phi_{i,j+\delta_x;k}}{\delta_x^{2}}\\
+    \mu_{i,j;k+1} &= - \alpha\phi_{i,j;k} + \beta\phi_{i,j;k}^3 - \kappa\nabla^2\phi_{i,j;k+1}
+\end{align*}
+
+\begin{align*}
+    \nabla^2\mu_{i,j;k+1} &= \frac{\mu_{i-\delta_x,j;k+1} + \mu_{i,j-\delta_x;k+1}- 4\mu_{i,j;k+1}+\mu_{i+\delta_x,j;k+1}+\mu_{i,j+\delta_x;k+1}}{\delta_x^{2}}\\
+    \phi_{i,j;k+1} &= \phi_{i,j;k} + M\delta_t\nabla^2\mu_{i,j;k+1}
+\end{align*}
+
+\end{document}
