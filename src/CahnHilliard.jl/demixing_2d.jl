@@ -1,5 +1,6 @@
 import DelimitedFiles: writedlm, readdlm
 using Printf
+using LinearAlgebra
 using FFTW
 using Random
 import ForwardDiff: hessian
@@ -434,7 +435,7 @@ function verify_numerics(; f = missing, options = (:show_stats,))
 
     xs     = range(-2., 2., step=δx)
     test_f = ismissing(f) ? x -> exp.(-x'*x/0.5)/(π/2.) : f
-    true_∇²f = ifismissing(f) ? x -> (x'*x-0.5)*exp(-x'*x/0.5)/(2π*0.015625) : x->tr(hessian(test_f, x))
+    true_∇²f = ismissing(f) ? x -> (x'*x-0.5)*exp(-x'*x/0.5)/(2π*0.015625) : x-tr(hessian(test_f, x))
 
     numeric_laplacian(f) = fdm_laplacian([f([x,y]) for x ∈ xs, y ∈ xs], δx)
     auto_laplacian(f)    = [tr(hessian(f, [x,y])) for x ∈ xs, y ∈ xs]
