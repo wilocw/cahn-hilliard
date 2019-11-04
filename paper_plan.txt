@@ -1,0 +1,25 @@
+cahn hilliard work:
+
+- general parameter estimation for demixing / free energy
+- grid search vs..
+	> bayesopt
+	> gradient-based optimisation (e.g. bfgs)
+- parameter sensitivity ?
+	> fisher information criterion
+- experimental data ?
+
+- [LATER] bayesian inference | gp-model of likelihood and do mcmc
+
+
+---
+Multiple simulations with different parameters:
+- benchmark grid search
+	then bayesian optimisation
+	then gradient-based optimisation
+- try 
+	- landau (quadratic polynomial) [3 parameters: a,b,k]
+	- FH (logarithmic) [3/4 parameters: Na[=Nb], chi, k]
+- parameter sensitivity for MSE
+	- use FIC [motivate?]
+- write paper ..
+- [possibly extend to 3-d] 
