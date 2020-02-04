@@ -180,7 +180,7 @@ def fftshift(X):
     ndims = len(dims)-1
 
     if ndims is 2:
-        nx, ny = dims[0] //2 ,dims[1]//2
+        nx, ny = dims[0]//2, dims[1]//2
         Y = tp.zeros_like(X)
         Y[0:nx, 0:ny, :] = X[nx:,ny:,:]
         Y[0:nx, ny:,:]   = X[nx:,0:ny, :]
