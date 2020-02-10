@@ -12,6 +12,7 @@ from pdes.util import safe_cast, scattering
 from gpytorch.models import ExactGP
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from gpytorch.likelihoods import GaussianLikelihood
+from gpytorch.means import ConstantMean
 from gpytorch.kernels import ScaleKernel, RBFKernel
 from gpytorch.distributions import MultivariateNormal
 
@@ -24,6 +25,64 @@ PARAM_DX, PARAM_DT   = 5e2, 1e8
 FLAG_MODEL_LANDAU    = True
 FLAG_SEED            = True
 PARAM_INIT_EVAL      = 5
+
+class Loss(torch.nn.Module):
+    def __init__(self, sim_y):
+        super(Loss, self).__init__()
+        self._y = torch.nn.Parameter(sim_y)
+
+    def forward(self, true_y):
+        return loss(true_y, self._y)
+
+class Evaluator(torch.nn.Module):
+    def __init__(self, pde, loss):
+        super(Evaluator, self).__init__()
+        self._pde  = pde
+        self._loss = loss
+        for idx, m in enumerate(self.modules()):
+            print(idx, '->', m)
+
+    def forward(self, x0, ts, y, dx = 1.):
+        sim_phis = odeint(self._pde, x0, ts, method='euler')
+
+        t_ = ts[99::900]
+        phis_ = sim_phis[99::900,:,0,...]
+        Ss = []
+        for i in range(len(t_)):
+            if i > 0:
+                S_ = scattering(phis_[i,...], dx)
+            else:
+                q, S_ = scattering(phis_[i,...], dx, True)
+            Ss.append(S_)
+
+        Ss = torch.stack(Ss, 0)
+        return self._loss(y, Ss)
+
+
+class ExactGPModel(gpytorch.models.ExactGP):
+    def __init__(self, train_x, train_y):
+        likelihood = GaussianLikelihood()
+        super(BayesOptGPModel, self).__init__(train_x, train_y, likelihood)
+        self.mean_module = ConstantMean()
+        self.covar_module = ScaleKernel(RBFKernel())
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+
+
+# def BayesOptModel(torch.nn.Module):
+#     def __init__(self, simulator, _priors=None, init_eval=None):
+#         super(BayesOptModel, self).__init__()
+#         self._priors = priors() if _priors is None else _priors
+#         self._simulator = simulator
+#         self.train_init(init_eval if init_eval is not None else PARAM_INIT_EVAL)
+#
+#     def train_init(self, N):
+#         pass
+#
+#     def forward(self):
+#         pass
 
 def sqdiff(y,y_):
     ''' (y-y')**2 '''
@@ -39,6 +98,12 @@ def priors():
         'b': torch.tensor([1.1691e-4, 1.2309e-4]),
         'k': torch.tensor([6.832446e-1, 7.2680455e-1])
     }
+
+def print_params(model):
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            print(name)
+            print(param.data)
 
 def run(obs, params_true, device='cpu'):
     device = safe_cast(torch.device, device)
@@ -59,46 +124,62 @@ def run(obs, params_true, device='cpu'):
             dx     = dx,
             device = device
         )
+        loss_fn = Evaluator(sim_pde, loss)
 
-        phi0 = torch.nn.Parameter(0.2 * torch.rand((NX, NX), device=device)).view(-1,1,NX,NX)
+        # print('printing pde params')
+        # print_params(sim_pde)
+        # print('..')
+        #
+        # sim_phis = odeint(sim_pde, phi0, ts, method='euler')
+        #
+        # t_ = ts[99::900]
+        # phis_ = sim_phis[99::900,:,0,...]
+        #
+        # Ss = []
+        # for i in range(len(t_)):
+        #     if i > 0:
+        #         S_ = scattering(phis_[i,...], dx)
+        #     else:
+        #         q, S_ = scattering(phis_[i,...], dx, True)
+        #     Ss.append(S_)
+        #
+        # Ss = torch.stack(Ss, 0)
+        #
+        # _loss = Loss(Ss)
+        # print('printing loss params')
+        # print_params(_loss)
+        # print('..')
+        # return _loss(y), dict([(name, param) for name, param in sim_pde.named_parameters() if param.requires_grad])
 
-        print(phi0)
-        sim_phis = odeint(sim_pde, phi0, ts, method='euler')
-
-        t_ = ts[99::900]
-        phis_ = sim_phis[99::900,:,0,...]
-
-        Ss = []
-        for i in range(len(t_)):
-            if i > 0:
-                S_ = scattering(phis_[i,...], dx)
-            else:
-                q, S_ = scattering(phis_[i,...], dx, True)
-            Ss.append(S_)
-
-        Ss = torch.stack(Ss, 0)
-
-        return loss(y, Ss), sim_phis
+        return loss_fn
 
     pgd = lhs(3, samples=PARAM_INIT_EVAL) # calculate initial samples from latin hypercube
     xs, ys = [],[]
 
     for j in range(PARAM_INIT_EVAL):
         xk = torch.stack(
-            [torch.nn.Parameter((priors_uniform[k][1]-priors_uniform[k][0])*torch.tensor(pgd[j,i], device=device, dtype=torch.float32) + priors_uniform[k][0]) for i,k in enumerate(('a','b','k'))],
+            [(priors_uniform[k][1]-priors_uniform[k][0])*torch.tensor(pgd[j,i], device=device, dtype=torch.float32) + priors_uniform[k][0] for i,k in enumerate(('a','b','k'))],
             0
         )
         xs.append(xk)
+#    ell, params = simulate(params)
 
-    params = xs[0]
-    print(params[0])
+    phi0 = (0.2 * torch.rand((NX, NX), device=device)).view(-1,1,NX,NX)
 
-    ell, phis = simulate(params)
-    print('simulated')
-    ell.backward()
-    print('calculated gradients')
-    #[print(p.grad) for p in params];
-    print(params.grad)
+    with torch.no_grad():
+        for j in range(PARAM_INIT_EVAL):
+            params = xs[0]
+            loss_fn = simulate(params)
+            ys.append(loss_fn(phi0, ts, y, dx))
+
+
+
+
+    # ell.backward()
+    # print('calculated gradients')
+    # for name, param in loss_fn.named_parameters():
+    #     print(name)
+    #     print(param.grad)
 
     #
     # params = {}
