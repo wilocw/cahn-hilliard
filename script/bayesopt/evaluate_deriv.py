@@ -11,10 +11,10 @@ from pdes.util import safe_cast, scattering
 
 from gpytorch.models import ExactGP
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from gpytorch.likelihoods import GaussianLikelihood, FixedNoiseGaussianLikelihood
-from gpytorch.means import ConstantMean
-from gpytorch.kernels import ScaleKernel, RBFKernel
-from gpytorch.distributions import MultivariateNormal
+from gpytorch.likelihoods import MultitaskGaussianLikelihood, FixedNoiseGaussianLikelihood
+from gpytorch.means import ConstantMeanGrad
+from gpytorch.kernels import ScaleKernel, RBFKernelGrad
+from gpytorch.distributions import MultitaskMultivariateNormal
 from gpytorch.settings import fast_pred_var, lazily_evaluate_kernels
 
 from pyDOE import lhs # latin-hypercube sampling
@@ -79,26 +79,29 @@ def optimise_lbfgs(model):
     opt = torch.optim.LBFGS([{'params':model.parameters()}], max_iter=1000)
     opt.step(closure)
 
-def optimise_adam(model, max_iter=50):
-    model.train()
+def optimise_adam(model, max_iter=50, fix_likelihood=True):
+    model.train() # set model to train (gpytorch state)
     mll = ExactMarginalLogLikelihood(model.likelihood, model)
-    opt = torch.optim.Adam([{'params':model.parameters()}], lr=0.1)
-    for _ in range(max_iter):
-        output = model(model.train_inputs[0])
-        opt.zero_grad()
-        loss   = -mll(output, model.train_targets)
-        loss.backward()
-        opt.step()
+    opt = torch.optim.Adam([ # use Adam optimiser (recommended by gpytorch) on parameters (ignore likelihood for bayesopt)
+        {'params': [v for k,v in model.named_parameters() if 'likelihood' not in k] if fix_likelihood else model.parameters()}
+    ], lr=0.1)
+    for _ in range(max_iter): # no convergence criteria implemented but 1000 generally more than enough
+        output = model(model.train_inputs[0]) # predicted f*
+        loss   = -mll(output, model.train_targets) # MLE(f*, y)
+        opt.zero_grad() # reset optimiser for this step
+        loss.backward() # calculate gradients of MLE
+        opt.step()      # iterate optimiser
 
 class ExactGPModel(ExactGP):
     def __init__(self, train_x, train_y, likelihood):
         super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
-        self.mean_module = ConstantMean()
-        self.covar_module = ScaleKernel(RBFKernel(arg_num_dims=3))
+        self.mean_module = ConstantMeanGrad()
+        self.base_kernel = RBFKernelGrad(arg_num_dims=3)
+        self.covar_module = ScaleKernel(self.base_kernel)
     def forward(self, x):
         mean_x = self.mean_module(x)
         covar_x = self.covar_module(x)
-        return MultivariateNormal(mean_x, covar_x)
+        return MultitaskMultivariateNormal(mean_x, covar_x)
 #
 # def acq(fo, model, x_eval=None):
 #     model.eval()
@@ -135,10 +138,18 @@ def print_params(model):
 
 def acq(fo, model, x_eval=None):
     model.eval()
-    if x_eval is None: x_eval = torch.linspace(0,1,100)
+    if x_eval is None: x_eval = torch.linspace(0,1,100).unsqueeze(-1)
+    print(x_eval.shape)
+    batch_sz = 100
     with torch.no_grad(), fast_pred_var(), lazily_evaluate_kernels(True):
-        f_ = model(x_eval)
-        mu, sig = f_.mean, f_.variance#covariance_matrix
+        mu, sig = [], []
+        for i in range(0, x_eval.shape[0], batch_sz):
+            f_ = model(x_eval[i:i+batch_sz,:])
+            mu.append(f_.mean[:,0])
+            sig.append(f_.variance[:,0])#covariance_matrix
+        mu = torch.cat(mu,0)
+        sig = torch.cat(sig,0)
+        print(mu.shape)
 
     _cdf = 0.5*(1+torch.erf((fo-mu)/(torch.sqrt(sig*2.))))
     _pdf = torch.exp(-(fo-mu)**2/(2*sig))/torch.sqrt(sig*2*3.141593)
@@ -181,31 +192,50 @@ def run(obs, params_true, device='cpu'):
 
     phi0 = (0.2 * torch.rand((NX, NX), device=device)).view(-1,1,NX,NX)
 
-    with torch.no_grad():
-        for j in range(PARAM_INIT_EVAL):
-            params = xs[j]
-            loss_fn = simulate(params)
-            ys.append(loss_fn(phi0, ts, y, dx))
+    # with torch.no_grad():
+    for j in range(PARAM_INIT_EVAL):
+        params = xs[j]
+        loss_fn = simulate(params)
+        # print(loss_fn._pde)
+        # for n,p in loss_fn.named_parameters():
+        #     print(n + '->' + str(p))
+        ell = loss_fn(phi0, ts, y, dx)
+        ell.backward()
+        grads = (
+            loss_fn._pde._a.grad,
+            loss_fn._pde._b.grad,
+            loss_fn._pde._k.grad
+        )
+        ys.append(torch.stack([ell.detach(), *grads]).unsqueeze(0))
+        print('init sample %d/%d' % (j, PARAM_INIT_EVAL))
 
-    x_init, y_init = torch.stack(xs), torch.stack(ys)
-    print(y_init)
+    x_init, y_init = torch.stack(xs), torch.cat(ys,0)
+
+    #
+    # print(y_init)
     N = PARAM_SEARCH_RES
     x_eval = torch.cat([x.reshape(-1,1) for x in torch.meshgrid(
         *[torch.linspace(priors_uniform[k][0], priors_uniform[k][1], N)\
             for k in priors_uniform]
     )],1)
 
+    print(x_init.shape)
+    print(x_eval.shape)
     x_train = x_init
     y_train = y_init
 
+    print(x_init)
+    print(y_init)
+
+    jit = 1e-2
+
+    lik = MultitaskGaussianLikelihood(num_tasks=4)
+    lik.noise_covar.noise = jit*torch.ones(4)
+    lik.noise = torch.tensor(jit).sqrt()
+
     for i in range(PARAM_MAX_EVAL - PARAM_INIT_EVAL):
         for ntry in range(5):
-            model = ExactGPModel(
-                x_train, y_train,
-                FixedNoiseGaussianLikelihood(
-                    noise=1e-2*torch.ones(len(x_train))
-                )
-            )
+            model = ExactGPModel(x_train, y_train, lik)
             try:
                 optimise(model, method='adam', max_iter=1000)
                 break
@@ -214,24 +244,39 @@ def run(obs, params_true, device='cpu'):
                 if ntry == 4:
                     raise err
 
-
-        u = acq(y_train.min(), model, x_eval)
-        xn = x_eval[u.argmax(),:]
-        x_eval = torch.cat([x_eval[0:u.argmax(),:], x_eval[u.argmax()+1:,:]])
-        # print(x_eval.shape)
+        u = acq(y_train[:,0].min(), model, x_eval)
+        idx = u.argmax()
+        xn = x_eval[idx,:]
         loss_fn = simulate(xn)
-        yn = loss_fn(phi0, ts, y, dx)
-        x_train = torch.cat([x_train, xn.reshape(1,-1)])
-        y_train = torch.stack([*y_train, yn.detach()])
-        print(i)
 
+        ell = loss_fn(phi0, ts, y, dx)
+        ell.backward()
+        grads = (
+            loss_fn._pde._a.grad,
+            loss_fn._pde._b.grad,
+            loss_fn._pde._k.grad
+        )
+        #ys.append(torch.stack([ell.detach(), *grads]).unsqueeze(0))
+
+        yn = torch.stack([ell.detach(), *grads],-1).unsqueeze(0)
+
+        x_eval = torch.cat([x_eval[0:idx,:], x_eval[idx+1:,:]],0)
+        x_train = torch.cat([x_train, xn.reshape(1,-1)])
+
+        # y_train = torch.stack([*y_train, yn.detach()])
+        y_train = torch.cat([y_train, yn], 0)
+        print(x_train)
+        print(y_train)
+
+        print(i)
+    #
     return (x_train, y_train)
     # ell.backward()
     # print('calculated gradients')
     # for name, param in loss_fn.named_parameters():
     #     print(name)
     #     print(param.grad)
-
+    #
     #
     # params = {}
     # for k,v in priors_uniform.items():

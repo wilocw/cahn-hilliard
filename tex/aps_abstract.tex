@@ -1,0 +1,20 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage[margin=1in]{geometry}
+
+\usepackage{mathtools,bm} %%% REQS FOR MATHS
+
+\begin{document}
+
+\noindent%
+%%% ABSTRACT TEXT %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+To find globally optimal parameters, we construct a loss function, $\mathcal{L}$, to describe the `distance' between the results of simulation given a selected parameter value, $\mathbf{y}^{(\theta)}$, and some observated outcome, $\mathbf{y}^\mathrm{obs}$. For its equivalency to maximum likelihood estimation, in statistics, we choose the mean squared-error. Thus, we seek to find parameter set, $\theta^\ast = \{\alpha^\ast,\beta^\ast,\kappa^\ast\}$, such that
+\begin{equation*}
+    \theta^\ast = \underset{\theta}{\mathrm{argmin}} \underbrace{\frac{1}{N}\sum^{N}_{i=1}|y_i^{(\theta)} - y_i^\mathrm{obs}|^2}_{\mathcal{L}(\theta)}
+\end{equation*}
+A grid-search approach to finding the global minima of $\mathcal{L}(\theta)$ can become computationally expensive with increasing number of parameters, which is particularly inhibitive given the computational requirements of the simulator. We adopt a Bayesian optimisation approach, to sample the parameter space intelligently using a metric for expected improvement.
+
+Bayesian optimisation is a global optimisation scheme that places a Gaussian process (GP) approximation over the loss, $\mathcal{L}(\theta)$: the GP represents the function as an infinite-dimensional normal distribution that can be used to estimate it over its entire input space, with quantifed uncertainty. The GP can initially be `trained' using a small number of evaluations of $\mathcal{L}$, and a suggestion for the next test-point can be obtained using the prediction of $\mathcal{L}$ and its relative uncertainty. New evaluations are used to update the GP estimation, and process is iterated.
+
+Benefits of Bayesian optimisation include its ability to localise regions where minima occur within a small number of iterations, but the intrinsic incorporation of uncertainty allows for an effective trade-off between this exploitation and exploration of the wider input space. Experimental results have shown that accurate joint estimation of the three (3) free energy parameters using only 25 evaluations of the simulator can be obtained using Bayesian optimsation.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\end{document}

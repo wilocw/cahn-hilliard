@@ -1,0 +1,56 @@
+\documentclass[a4paper,oneside]{article}
+
+\usepackage[top=1in,left=0.7in,right=0.7in,bottom=1in]{geometry}
+
+\usepackage{mathtools,bm}
+
+\newcommand{\pardiff}[2][]{\frac{\partial#1}{\partial#2}}
+\newcommand{\lapl}{\nabla^2}
+\newcommand{\vphi}{\bm\varphi}
+
+\title{Parameter Estimation in Demixing Experiments}
+\author{{}}\date{\today}
+
+\begin{document}
+\maketitle
+
+\section*{Background}
+\subsection*{Cahn-Hilliard Equation}
+
+\begin{align}
+\pardiff{t}\vphi(\mathbf{x},t) = M\lapl\pardiff{\vphi}\bm{F}(\vphi)
+\end{align}
+
+\paragraph{Discretisation}
+
+\subsection*{Parametric Forms for Free-Energy}
+\paragraph{Landau}
+\begin{align}
+    \bm{F}(\vphi) &= -\frac{\alpha}{2}\vphi^2 + \frac{\beta}{4}\vphi^4 + \kappa\lapl\vphi \\
+    \pardiff[\bm{F}]{\vphi} &= -\alpha\vphi + \beta\vphi^3 + \kappa\nabla^2\vphi.
+\end{align}
+
+\paragraph{Flory Huggins}
+\begin{align}
+    \bm{F}(\vphi) &= \frac{\vphi}{\nu_AN_A}\log\vphi + \frac{1-\vphi}{\nu_BN_B}\log(1-\vphi) + \frac{\chi}{\sqrt{\nu_A\nu_B}}\vphi(1-\vphi) + \kappa\nabla^2\vphi \\
+    \pardiff[\bm{F}]{\vphi} &= \frac{1}{\nu_AN_A}(1+\log\vphi) - \frac{1}{\nu_BN_B}(1 + \log(1-\vphi)) + \frac{\chi}{\sqrt{\nu_A\nu_B}}(1-\vphi)+ \kappa\nabla^2\vphi.
+\end{align}
+Typically, $\nu = \nu_A = \nu_B$ and $N = N_A=N_B$, giving
+\begin{align}
+\pardiff[\bm{F}]{\vphi} &= \frac{1}{\nu N}\left(\log\vphi - \log(1-\vphi) + \chi N(1-\vphi) + \kappa\nu N \nabla^2\vphi\right)
+\end{align}
+
+\subsection*{Parameter Estimation}
+\paragraph{Grid Search}
+
+\paragraph{Quasi-Newton Optimisation}
+
+\paragraph{Bayesian Optimation}
+
+
+\section*{Implementation}
+
+
+\section*{Experiments}
+
+\end{document}
