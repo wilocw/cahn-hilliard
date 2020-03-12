@@ -347,12 +347,12 @@ if __name__ == '__main__':
 
     results = run(obs, params_true, device=device)
 
-    print('pred.')
-    print(results[0][results[1].argmin(),:])
-    print('true.')
-    print(params_true)
+    # print('pred.')
+    # print(results[0][results[1].argmin(),:])
+    # print('true.')
+    # print(params_true)
 
-    with open('bayesopt_result.p','wb') as fid:
+    with open('bayesopt_deriv_result.p','wb') as fid:
         pickle.dump(results, fid)
     #
     # with open('test_simulation','wb') as fid:
