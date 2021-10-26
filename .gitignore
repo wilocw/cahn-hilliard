@@ -2,6 +2,7 @@
 *.dat
 
 */.ipynb_checkpoints/*
+*/.tmp/
 
 *.pdf
 *.synctex.gz
