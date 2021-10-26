@@ -138,5 +138,5 @@ if __name__ == '__main__':
 
     results = run([], [], device=device)
 
-    with open('test_simulation','wb') as fid:
+    with open(args.data_file,'wb') as fid:
         pickle.dump(results, fid)
