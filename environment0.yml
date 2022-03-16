@@ -1,0 +1,16 @@
+name: pytorch
+channels:
+  - defaults
+dependencies:
+  - scikit-learn
+  - python=3.6
+  - matplotlib
+  - scipy
+  - numpy
+  - pytorch
+  - torchvision
+  - cudatoolkit=10.1
+  - jupyterlab
+  - botorch
+  - jupyter
+prefix: C:\Users\Wil_User\Anaconda3\envs\pytorch
